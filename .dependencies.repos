@@ -1,0 +1,5 @@
+repositories:
+  arav_common:
+    type: git
+    url: https://github.com/arav-jp/quaternion_operation.git
+    version: master
