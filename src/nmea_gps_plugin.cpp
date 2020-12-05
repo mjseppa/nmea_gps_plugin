@@ -114,21 +114,14 @@ namespace gazebo
         return;
     }
 
+    std::string NmeaGpsPlugin::getCheckSum(const std::string sentence)
     {
-
-    std::string NmeaGpsPlugin::getCheckSum(std::string sentence)
-    {
-        uint8_t checksum;
-        for(int i=1; i<sentence.size(); i++)
-        {
-            int c = sentence[i];
-            checksum ^= c;
-        }
-        uint8_t rest = checksum%16;
-        uint8_t quotient = (checksum-rest)/16;
-        std::string ret = getHexString(quotient) + getHexString(rest);
-        ret = "*" + ret;
-        return ret;
+      uint checksum = 0;
+      for(auto s : sentence)
+        checksum ^= static_cast<uint>(s);
+      std::stringstream ss;
+      ss << std::uppercase << std::setfill ('0') << std::setw(2) << std::hex << checksum;
+      return "*" + ss.str();
     }
 
     void NmeaGpsPlugin::Reset()
