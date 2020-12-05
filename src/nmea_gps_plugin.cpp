@@ -134,7 +134,7 @@ namespace gazebo
         nmea_msgs::Sentence sentence;
         sentence.header.frame_id = frame_id_;
         sentence.header.stamp = stamp;
-        sentence.sentence = "$GPGGA," + getUnixTime(stamp) + ",";
+        sentence.sentence = "GPGGA," + getUnixTime(stamp) + ",";
         double lat = current_geo_pose_.position.latitude;
         std::string north_or_south;
         if(lat >= 0.0)
@@ -160,6 +160,7 @@ namespace gazebo
         sentence.sentence = sentence.sentence + std::to_string(current_geo_pose_.position.altitude) + ",M,";
         sentence.sentence = sentence.sentence + std::to_string(current_geo_pose_.position.altitude) + ",M,,0000";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+        sentence.sentence = "$" + sentence.sentence;
         return sentence;
     }
 
@@ -168,7 +169,7 @@ namespace gazebo
         nmea_msgs::Sentence sentence;
         sentence.header.frame_id = frame_id_;
         sentence.header.stamp = stamp;
-        sentence.sentence = "$GPRMC," + getUnixTime(stamp) + ",A,";
+        sentence.sentence = "GPRMC," + getUnixTime(stamp) + ",A,";
         double lat = current_geo_pose_.position.latitude;
         std::string north_or_south;
         if(lat >= 0.0)
@@ -203,6 +204,7 @@ namespace gazebo
         sentence.sentence = sentence.sentence + getUnixDay(stamp) + ",,,";
         sentence.sentence = sentence.sentence + "A";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+        sentence.sentence = "$" + sentence.sentence;
         return sentence;
     }
 
@@ -211,7 +213,7 @@ namespace gazebo
         nmea_msgs::Sentence sentence;
         sentence.header.frame_id = frame_id_;
         sentence.header.stamp = stamp;
-        sentence.sentence = "$GPVTG,";
+        sentence.sentence = "GPVTG,";
         double angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x);
         if(angle < 0)
         {
@@ -225,6 +227,7 @@ namespace gazebo
         sentence.sentence = sentence.sentence + std::to_string(vel_kmph) + ",K,";
         sentence.sentence = sentence.sentence + ",A";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+        sentence.sentence = "$" + sentence.sentence;
         return sentence;
     }
 
@@ -233,7 +236,7 @@ namespace gazebo
         nmea_msgs::Sentence sentence;
         sentence.header.frame_id = frame_id_;
         sentence.header.stamp = stamp;
-        sentence.sentence = "$GPHDT,";
+        sentence.sentence = "GPHDT,";
         geometry_msgs::Vector3 vec = quaternion_operation::convertQuaternionToEulerAngle(current_geo_pose_.orientation);
         double angle = -1*vec.z/M_PI*180;
         if(angle < 0)
@@ -242,6 +245,7 @@ namespace gazebo
         }
         sentence.sentence = sentence.sentence + std::to_string(angle) + ",T";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+        sentence.sentence = "$" + sentence.sentence;
         return sentence;
     }
 
