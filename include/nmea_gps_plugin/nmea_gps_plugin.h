@@ -175,7 +175,6 @@ namespace gazebo
              * 
              */
             std::string convertToDmm(double value);
-            std::string getHexString(uint8_t value);
             geometry_msgs::Twist current_twist_;
             std::unique_ptr<GpsSensorModel> sensor_model_ptr_;
             double position_gaussiaa_noise_;

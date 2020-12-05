@@ -114,40 +114,7 @@ namespace gazebo
         return;
     }
 
-    std::string NmeaGpsPlugin::getHexString(uint8_t value)
     {
-        ROS_ASSERT(value <= 16);
-        std::string ret;
-        if(value == 10)
-        {
-            ret = "A";
-        }
-        else if(value == 11)
-        {
-            ret = "B";
-        }
-        else if(value == 12)
-        {
-            ret = "C";
-        }
-        else if(value == 13)
-        {
-            ret = "D";
-        }
-        else if(value == 14)
-        {
-            ret = "E";
-        }
-        else if(value == 15)
-        {
-            ret = "F";
-        }
-        else
-        {
-            ret = std::to_string(value);
-        }
-        return ret;
-    }
 
     std::string NmeaGpsPlugin::getCheckSum(std::string sentence)
     {
