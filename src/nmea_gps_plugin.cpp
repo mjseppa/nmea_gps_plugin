@@ -100,7 +100,7 @@ namespace gazebo
         std::unique_ptr<GpsSensorModel> sensor_model_ptr(new GpsSensorModel(position_gaussiaa_noise_,orientation_gaussian_noise_,velocity_gaussian_noise_));
         sensor_model_ptr_ = std::move(sensor_model_ptr);
         node_handle_ = ros::NodeHandle(namespace_);
-        nmea_pub_ = node_handle_.advertise<nmea_msgs::Sentence>(nmea_topic_,1);
+        nmea_pub_ = node_handle_.advertise<nmea_msgs::Sentence>(nmea_topic_,10);
         initial_pose_.position.longitude = reference_longitude_;
         initial_pose_.position.latitude = reference_latitude_;
         initial_pose_.position.altitude = reference_altitude_;
@@ -145,7 +145,7 @@ namespace gazebo
         {
             north_or_south = "S";
         }
-        sentence.sentence = sentence.sentence + convertToDmm(lat) + "," + north_or_south + ",";
+        sentence.sentence = sentence.sentence + convertToDmm(lat,2) + "," + north_or_south + ",";
         double lon = current_geo_pose_.position.longitude;
         std::string east_or_west;
         if(lon >= 0.0)
@@ -156,7 +156,7 @@ namespace gazebo
         {
             east_or_west = "W";
         }
-        sentence.sentence = sentence.sentence + convertToDmm(lon) + "," + east_or_west + ",1,08,1.0,";
+        sentence.sentence = sentence.sentence + convertToDmm(lon,3) + "," + east_or_west + ",4,08,1.0,";
         sentence.sentence = sentence.sentence + std::to_string(current_geo_pose_.position.altitude) + ",M,";
         sentence.sentence = sentence.sentence + std::to_string(current_geo_pose_.position.altitude) + ",M,,0000";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
@@ -180,7 +180,7 @@ namespace gazebo
         {
             north_or_south = "S";
         }
-        sentence.sentence = sentence.sentence + convertToDmm(lat) + "," + north_or_south + ",";
+        sentence.sentence = sentence.sentence + convertToDmm(lat,2) + "," + north_or_south + ",";
         double lon = current_geo_pose_.position.longitude;
         std::string east_or_west;
         if(lon >= 0.0)
@@ -191,7 +191,7 @@ namespace gazebo
         {
             east_or_west = "W";
         }
-        sentence.sentence = sentence.sentence + convertToDmm(lon) + "," + east_or_west + ",";
+        sentence.sentence = sentence.sentence + convertToDmm(lon,3) + "," + east_or_west + ",";
         double vel = std::sqrt(std::pow(current_twist_.linear.x,2)+std::pow(current_twist_.linear.y,2)) * 1.94384; //[knot]
         sentence.sentence = sentence.sentence + std::to_string(vel) + ",";
         double angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x);
@@ -313,7 +313,8 @@ namespace gazebo
         common::Time sim_time = world_ptr_->GetSimTime();
 #endif
         bool publish;
-        if(!last_publish_timestamp_ || sim_time-(*last_publish_timestamp_) > common::Time(1.0/publish_rate_))
+        double step = world_ptr_->Physics()->GetMaxStepSize(); double fraction = fmod(sim_time.Double() + (step / 2.0), 1.0/publish_rate_); if (!  ((fraction >= 0.0) && (fraction < step)) )  {  return; }
+if(!last_publish_timestamp_ || sim_time-(*last_publish_timestamp_) > common::Time(1.0/publish_rate_))
         {
             last_publish_timestamp_ = sim_time;
             publish = true;
@@ -390,14 +391,15 @@ namespace gazebo
         return;
     }
 
-    std::string NmeaGpsPlugin::convertToDmm(double value)
+    std::string NmeaGpsPlugin::convertToDmm(double value, int width)
     {
         std::string ret;
         value = std::fabs(value);
         int deg = std::floor(value);
-        std::stringstream ss;
+        std::stringstream ss, ss2;
+        ss2 <<  std::setfill ('0') << std::setw(width) << deg;
         ss << std::setprecision(7) << (value-(double)deg)*60.0;
-        ret = std::to_string(deg) + ss.str();
+        ret = ss2.str() + ss.str();
         return ret;
     }
 

@@ -174,7 +174,7 @@ namespace gazebo
              * @brief Convert DDD -> DMM format
              * 
              */
-            std::string convertToDmm(double value);
+            std::string convertToDmm(double value, int width);
             geometry_msgs::Twist current_twist_;
             std::unique_ptr<GpsSensorModel> sensor_model_ptr_;
             double position_gaussiaa_noise_;
