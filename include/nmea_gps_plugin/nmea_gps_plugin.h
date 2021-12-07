@@ -92,6 +92,11 @@ namespace nmea_gps_plugin
          * 
          */
         constexpr double velocity_gaussian_noise = 0.05;
+        /**
+         * @brief Emulate internal comapss on HDT
+         * 
+         */
+        constexpr bool hdt_use_compass = true;
     }
 }
 
@@ -155,6 +160,15 @@ namespace gazebo
              */
             std::string getUnixDay(ros::Time stamp);
             /**
+             * @brief Correct degrees angle to 0-360 for NMEA
+             */
+            double correctPISegment(double in);
+            /**
+             * @brief generate GPGST sentence
+             * @sa https://docs.novatel.com/OEM7/Content/Logs/GPGST.htm?Highlight=GPGST
+             */
+            nmea_msgs::Sentence getGPGST(ros::Time stamp);
+            /**
              * @brief generate GPRMC sentence
              * @sa https://docs.novatel.com/OEM7/Content/Logs/GPRMC.htm
              */
@@ -180,6 +194,7 @@ namespace gazebo
             double position_gaussiaa_noise_;
             double orientation_gaussian_noise_;
             double velocity_gaussian_noise_;
+            bool hdt_use_internalcompass_;
 #if (GAZEBO_MAJOR_VERSION >= 8)
             boost::optional<ignition::math::Pose3d> initial_gazebo_pose_;
 #else

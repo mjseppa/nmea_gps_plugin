@@ -54,6 +54,7 @@ namespace gazebo
         position_gaussiaa_noise_ = nmea_gps_plugin::default_param::position_gaussiaa_noise;
         orientation_gaussian_noise_ = nmea_gps_plugin::default_param::orientation_gaussian_noise;
         velocity_gaussian_noise_ = nmea_gps_plugin::default_param::velocity_gaussian_noise;
+        hdt_use_internalcompass_ = nmea_gps_plugin::default_param::hdt_use_compass;
         if (sdf->HasElement("frameId"))
         {
             frame_id_ = sdf->GetElement("frameId")->GetValue()->GetAsString();
@@ -97,6 +98,10 @@ namespace gazebo
         {
             sdf->GetElement("velocityGaussiaNoise")->GetValue()->Get(velocity_gaussian_noise_);
         }
+        if (sdf->HasElement("HDTcompass"))
+        {
+            sdf->GetElement("HDTcompass")->GetValue()->Get(hdt_use_internalcompass_);
+        }
         std::unique_ptr<GpsSensorModel> sensor_model_ptr(new GpsSensorModel(position_gaussiaa_noise_,orientation_gaussian_noise_,velocity_gaussian_noise_));
         sensor_model_ptr_ = std::move(sensor_model_ptr);
         node_handle_ = ros::NodeHandle(namespace_);
@@ -128,6 +133,33 @@ namespace gazebo
     {
         return;
     }
+
+
+    double NmeaGpsPlugin::correctPISegment(double in)
+    {
+        if (in > 360)
+        {
+            return correctPISegment(in - 360);
+        }
+        if (in < 0)
+        {
+            return correctPISegment(in + 360);
+        }
+        return in;
+    }
+
+
+    nmea_msgs::Sentence NmeaGpsPlugin::getGPGST(ros::Time stamp)
+    {
+        nmea_msgs::Sentence sentence;
+        sentence.header.frame_id = frame_id_;
+        sentence.header.stamp = stamp;
+        sentence.sentence = "GPGST," + getUnixTime(stamp) + ",35,0.061,0.025,150,0.022,0.015,0.030";
+        sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+        sentence.sentence = "$" + sentence.sentence;
+        return sentence;
+    }
+
 
     nmea_msgs::Sentence NmeaGpsPlugin::getGPGGA(ros::Time stamp)
     {
@@ -193,16 +225,20 @@ namespace gazebo
         }
         sentence.sentence = sentence.sentence + convertToDmm(lon,3) + "," + east_or_west + ",";
         double vel = std::sqrt(std::pow(current_twist_.linear.x,2)+std::pow(current_twist_.linear.y,2)) * 1.94384; //[knot]
-        sentence.sentence = sentence.sentence + std::to_string(vel) + ",";
-        double angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x);
-        if(angle < 0)
+        if (vel > 0.1*1.94384)
         {
-            angle = angle + 360.0;
+            sentence.sentence = sentence.sentence + std::to_string(vel) + ",";
+            double angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x)*(360/(2*M_PI));
+            angle = correctPISegment(angle);
+            sentence.sentence = sentence.sentence + std::to_string(angle) + ",";
         }
-        angle = (double)(int)((angle*pow(10.0, 2)) + 0.9 ) * pow(10.0, -1);
-        sentence.sentence = sentence.sentence + std::to_string(angle) + ",";
+        else
+        {
+            sentence.sentence = sentence.sentence + "0.0,"; // Speed
+            sentence.sentence = sentence.sentence + ","; // Angle
+        }
         sentence.sentence = sentence.sentence + getUnixDay(stamp) + ",,,";
-        sentence.sentence = sentence.sentence + "A";
+        sentence.sentence = sentence.sentence + "D";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
         sentence.sentence = "$" + sentence.sentence;
         return sentence;
@@ -214,18 +250,23 @@ namespace gazebo
         sentence.header.frame_id = frame_id_;
         sentence.header.stamp = stamp;
         sentence.sentence = "GPVTG,";
-        double angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x);
-        if(angle < 0)
+        double vel_kmph = std::sqrt(std::pow(current_twist_.linear.x,2)+std::pow(current_twist_.linear.y,2)) * 3.6; //[km/h]
+        if (vel_kmph < 0.36)
         {
-            angle = angle + 360.0;
+            sentence.sentence = sentence.sentence + ",T,,M,0.00,N,0.00,K,D";
+            sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+            sentence.sentence = "$" + sentence.sentence;
+            return sentence;
         }
-        angle = (double)(int)((angle*pow(10.0, 2)) + 0.9 ) * pow(10.0, -1);
-        sentence.sentence = sentence.sentence + std::to_string(angle) + ",T,,M,";
+        double angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x)*(360/(2*M_PI));
+        angle = correctPISegment(angle);
+        std::stringstream anglestream;
+        anglestream << std::fixed << std::setprecision(2) << angle;
+        sentence.sentence = sentence.sentence + anglestream.str() + ",T,,M,";
         double vel_knot = std::sqrt(std::pow(current_twist_.linear.x,2)+std::pow(current_twist_.linear.y,2)) * 1.94384; //[knot]
         sentence.sentence = sentence.sentence + std::to_string(vel_knot) + ",N,";
-        double vel_kmph = std::sqrt(std::pow(current_twist_.linear.x,2)+std::pow(current_twist_.linear.y,2)) * 3.6; //[km/h]
         sentence.sentence = sentence.sentence + std::to_string(vel_kmph) + ",K,";
-        sentence.sentence = sentence.sentence + ",A";
+        sentence.sentence = sentence.sentence + ",D";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
         sentence.sentence = "$" + sentence.sentence;
         return sentence;
@@ -238,11 +279,21 @@ namespace gazebo
         sentence.header.stamp = stamp;
         sentence.sentence = "GPHDT,";
         geometry_msgs::Vector3 vec = quaternion_operation::convertQuaternionToEulerAngle(current_geo_pose_.orientation);
-        double angle = -1*vec.z/M_PI*180;
-        if(angle < 0)
+        double angle = 90 + -1*vec.z/M_PI*180;
+        if (!hdt_use_internalcompass_) // No internal compass, emulate just from movement
         {
-            angle = angle + 360.0;
+            double vel = std::sqrt(std::pow(current_twist_.linear.x,2)+std::pow(current_twist_.linear.y,2));
+            if (vel < 0.1)
+            {
+                sentence.sentence = sentence.sentence + ",T";
+                sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
+                sentence.sentence = "$" + sentence.sentence;
+                return sentence;
+            }
+            angle = -1*std::atan2(current_twist_.linear.y,current_twist_.linear.x); // Radians
+            angle = angle*(360/(2*M_PI));
         }
+        angle = correctPISegment(angle);
         sentence.sentence = sentence.sentence + std::to_string(angle) + ",T";
         sentence.sentence = sentence.sentence + getCheckSum(sentence.sentence);
         sentence.sentence = "$" + sentence.sentence;
@@ -388,6 +439,7 @@ if(!last_publish_timestamp_ || sim_time-(*last_publish_timestamp_) > common::Tim
         nmea_pub_.publish(getGPGGA(stamp));
         nmea_pub_.publish(getGPVTG(stamp));
         nmea_pub_.publish(getGPHDT(stamp));
+        nmea_pub_.publish(getGPGST(stamp));
         return;
     }
 
